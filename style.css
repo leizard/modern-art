@@ -21,6 +21,8 @@ h1 {
   letter-spacing: 0.1em;
   text-transform: lowercase;
   margin-bottom: 1em;
+  color: white;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 button#generate-btn {
