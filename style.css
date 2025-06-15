@@ -1,8 +1,9 @@
 body {
   margin: 0;
   font-family: 'Segoe UI', Arial, sans-serif;
-  background: #222;
-  color: #fff;
+  background: linear-gradient(135deg, #4CAF50 0%, #ffffff 100%);
+  color: #333;
+  min-height: 100vh;
 }
 
 .container {
