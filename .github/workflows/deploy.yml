@@ -84,7 +84,7 @@ jobs:
     - name: Deploy to Production VM
       uses: appleboy/ssh-action@v1.0.3
       with:
-        host: "34.59.2.8"
+        host: "46.250.239.106"
         username: ${{ secrets.VM_USERNAME }}
         key: ${{ secrets.VM_SSH_KEY }}
         timeout: 300s
@@ -104,7 +104,7 @@ jobs:
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           
           # Pull latest image
-          docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml pull web
           
           # Stop current containers gracefully
           docker compose -f docker-compose.yml -f docker-compose.prod.yml down --timeout 30 || true
@@ -153,20 +153,20 @@ jobs:
     if: github.ref == 'refs/heads/main'
     
     steps:
-    - name: Verify External Access
+    - name: Verify HTTP Access
       run: |
         # Wait for service to be fully ready
         sleep 10
         
-        # Test external access
+        # Test HTTP access
         for i in {1..5}; do
-          if curl -f -m 10 http://34.59.2.8:3000; then
-            echo "✅ Website is publicly accessible"
+          if curl -f -m 10 http://46.250.239.106:3000; then
+            echo "✅ Website is accessible at http://46.250.239.106:3000"
             exit 0
           fi
-          echo "Attempt $i/5: Waiting for external access..."
+          echo "Attempt $i/5: Waiting for access..."
           sleep 10
         done
         
-        echo "❌ External access verification failed"
+        echo "❌ Website verification failed"
         exit 1
