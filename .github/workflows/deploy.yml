@@ -10,6 +10,10 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -21,13 +25,12 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '18.17.0'
-        cache: 'npm'
     
     - name: Install dependencies
-      run: npm ci
+      run: npm install
     
     - name: Run tests
-      run: npm test
+      run: npm test --if-present
       continue-on-error: true
 
   build:
@@ -81,71 +84,85 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
     
+    - name: Setup SSH Key
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H 46.250.239.106 >> ~/.ssh/known_hosts
+    
     - name: Deploy to Production VM
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: "46.250.239.106"
-        username: ${{ secrets.VM_USERNAME }}
-        key: ${{ secrets.VM_SSH_KEY }}
-        timeout: 300s
-        script: |
-          set -e
-          
-          # Navigate to deployment directory
-          cd /opt/modern-art
-          
-          # Update deployment files
-          git pull origin main 2>/dev/null || echo "No git repo, using uploaded files"
-          
-          # Set environment variable for compose
-          export GITHUB_REPOSITORY="${{ github.repository }}"
-          
-          # Login to GitHub Container Registry
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          
-          # Pull latest image
-          docker compose -f docker-compose.yml -f docker-compose.prod.yml pull web
-          
-          # Stop current containers gracefully
-          docker compose -f docker-compose.yml -f docker-compose.prod.yml down --timeout 30 || true
-          
-          # Remove any orphaned containers
-          docker compose -f docker-compose.yml -f docker-compose.prod.yml rm -f || true
-          
-          # Start new deployment
-          docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-          
-          # Wait for health checks to pass
-          echo "Waiting for health checks to pass..."
-          for i in {1..24}; do
-            if docker compose -f docker-compose.yml -f docker-compose.prod.yml ps --format json | jq -r '.[].Health' | grep -q "healthy"; then
-              echo "✅ Health checks passed!"
-              break
-            fi
-            if [ $i -eq 24 ]; then
-              echo "❌ Health checks failed after 2 minutes"
-              docker compose -f docker-compose.yml -f docker-compose.prod.yml logs
-              exit 1
-            fi
-            echo "Attempt $i/24: Waiting for containers to be healthy..."
-            sleep 5
-          done
-          
-          # Final verification
-          sleep 5
-          if curl -f http://localhost:3000 >/dev/null 2>&1; then
-            echo "✅ Application is responding correctly"
-            
-            # Log successful deployment
-            echo "$(date): Deployment successful - Commit: ${{ github.sha }}" >> /opt/modern-art/deployment.log
-            echo "GitHub Action Run: ${{ github.run_id }}" >> /opt/modern-art/deployment.log
-          else
-            echo "❌ Application health check failed"
+      run: |
+        ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.VM_USERNAME }}@46.250.239.106 << 'EOF'
+        set -e
+        
+        # Navigate to deployment directory
+        cd /opt/modern-art
+        
+        # Clone or update repository
+        if [ ! -d ".git" ]; then
+          echo "Cloning repository for the first time..."
+          git clone https://github.com/leizard/modern-art.git .
+        else
+          echo "Updating existing repository..."
+          git fetch origin
+          git reset --hard origin/main
+          git clean -fd
+        fi
+        
+        # Verify files exist
+        ls -la docker-compose*.yml
+        
+        # Set environment variable for compose
+        export GITHUB_REPOSITORY="leizard/modern-art"
+        
+        # Login to GitHub Container Registry
+        echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+        
+        # Pull latest image
+        docker compose -f docker-compose.yml -f docker-compose.prod.yml pull web
+        
+        # Stop current containers gracefully
+        docker compose -f docker-compose.yml -f docker-compose.prod.yml down --timeout 30 || true
+        
+        # Remove any orphaned containers
+        docker compose -f docker-compose.yml -f docker-compose.prod.yml rm -f || true
+        
+        # Start new deployment
+        docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+        
+        # Wait for health checks to pass
+        echo "Waiting for health checks to pass..."
+        for i in {1..24}; do
+          if docker compose -f docker-compose.yml -f docker-compose.prod.yml ps --format json | jq -r '.[].Health' | grep -q "healthy"; then
+            echo "✅ Health checks passed!"
+            break
+          fi
+          if [ $i -eq 24 ]; then
+            echo "❌ Health checks failed after 2 minutes"
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml logs
             exit 1
           fi
+          echo "Attempt $i/24: Waiting for containers to be healthy..."
+          sleep 5
+        done
+        
+        # Final verification
+        sleep 5
+        if curl -f http://localhost:3000 >/dev/null 2>&1; then
+          echo "✅ Application is responding correctly"
           
-          # Cleanup old images (keep last 3)
-          docker image prune -f --filter "until=72h"
+          # Log successful deployment
+          echo "$(date): Deployment successful - Commit: ${{ github.sha }}" >> /opt/modern-art/deployment.log
+          echo "GitHub Action Run: ${{ github.run_id }}" >> /opt/modern-art/deployment.log
+        else
+          echo "❌ Application health check failed"
+          exit 1
+        fi
+        
+        # Cleanup old images (keep last 3)
+        docker image prune -f --filter "until=72h"
+        EOF
 
   verify:
     needs: deploy
