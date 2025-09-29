@@ -131,19 +131,24 @@ jobs:
         # Start new deployment
         docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
         
-        # Wait for health checks to pass
-        echo "Waiting for health checks to pass..."
+        # Wait for application to be ready
+        echo "Waiting for application to be ready..."
         for i in {1..24}; do
-          if docker compose -f docker-compose.yml -f docker-compose.prod.yml ps --format json | jq -r '.[].Health' | grep -q "healthy"; then
-            echo "✅ Health checks passed!"
-            break
+          # Check if container is running
+          if docker ps --filter "name=modern-art-website" --filter "status=running" | grep -q "modern-art-website"; then
+            # Check if application responds
+            if curl -f -s http://localhost:3000 >/dev/null 2>&1; then
+              echo "✅ Container is running and application is responding!"
+              break
+            fi
           fi
+          
           if [ $i -eq 24 ]; then
-            echo "❌ Health checks failed after 2 minutes"
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml logs
+            echo "❌ Application failed to start after 2 minutes"
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=50
             exit 1
           fi
-          echo "Attempt $i/24: Waiting for containers to be healthy..."
+          echo "Attempt $i/24: Waiting for application to be ready..."
           sleep 5
         done
         
