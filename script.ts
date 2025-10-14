@@ -55,8 +55,7 @@ function random3DTransform(): string {
 function generateRandomName(): string {
   const adj = adjectives[getRandomInt(adjectives.length)];
   const noun = nouns[getRandomInt(nouns.length)];
-  return `Trieu Duong`;
-  //return `${adj} ${noun}`;
+  return `${adj} ${noun}`;
 }
 
 interface Shape {
