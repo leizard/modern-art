@@ -55,8 +55,8 @@ function random3DTransform(): string {
 function generateRandomName(): string {
   const adj = adjectives[getRandomInt(adjectives.length)];
   const noun = nouns[getRandomInt(nouns.length)];
-  //return `${adj} ${noun}`;
-  return "Na Na";
+  return `${adj} ${noun}`;
+  //return "Na Na";
 }
 
 interface Shape {
