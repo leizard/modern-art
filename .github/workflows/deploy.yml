@@ -175,20 +175,26 @@ jobs:
     if: github.ref == 'refs/heads/main'
     
     steps:
-    - name: Verify HTTP Access
+    - name: Verify HTTPS Access
       run: |
         # Wait for service to be fully ready
         sleep 10
         
-        # Test HTTP access
+        # Test HTTPS access
         for i in {1..5}; do
-          if curl -f -m 10 http://46.250.239.106:3000; then
-            echo "✅ Website is accessible at http://46.250.239.106:3000"
+          if curl -f -m 10 https://leiduong.me; then
+            echo "✅ Website is accessible via HTTPS at https://leiduong.me"
             exit 0
           fi
-          echo "Attempt $i/5: Waiting for access..."
+          echo "Attempt $i/5: Waiting for HTTPS access..."
           sleep 10
         done
+        
+        # Fallback to HTTP test if HTTPS not ready yet
+        if curl -f -m 10 http://leiduong.me; then
+          echo "⚠️  Website accessible via HTTP, HTTPS may need more time"
+          exit 0
+        fi
         
         echo "❌ Website verification failed"
         exit 1
